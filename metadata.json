@@ -1,0 +1,6 @@
+{
+  "name": "UP Police Media Monitoring & Fact-Check Dashboard",
+  "description": "उत्तर प्रदेश पुलिस मीडिया मॉनिटरिंग, सेंटीमेंट एनालिसिस (सकारात्मक/नकारात्मक विश्लेषण) और फैक्ट-चेक संचालन हेतु एक एआई-संचालित डैशबोर्ड।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
