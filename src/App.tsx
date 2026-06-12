@@ -31,7 +31,10 @@ import {
   Send,
   Bot,
   Settings,
-  Key
+  Key,
+  ScanLine,
+  UploadCloud,
+  Image as ImageIcon
 } from "lucide-react";
 import { NewsItem, MediaAlert } from "./types";
 import { initialNewsItems, initialMediaAlerts } from "./data";
@@ -48,7 +51,9 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialMediaAlerts;
   });
 
-  const [activeTab, setActiveTab] = useState<"feed" | "factcheck" | "analytics" | "policy" | "aichat">("feed");
+  const [activeTab, setActiveTab] = useState<"feed" | "factcheck" | "analytics" | "policy" | "aichat" | "scanner">("feed");
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannerError, setScannerError] = useState("");
   
   // News filtering & sorting states
   const [searchQuery, setSearchQuery] = useState("");
@@ -131,6 +136,100 @@ export default function App() {
     return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
   };
 
+
+  // Direct Gemini Vision API call (for Newspaper Scanner)
+  const callGeminiVisionDirect = async (systemPrompt: string, base64Image: string, mimeType: string): Promise<string> => {
+    if (!geminiApiKey) throw new Error("NO_KEY");
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+    const body = {
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [{
+        role: "user",
+        parts: [
+          { inlineData: { data: base64Image, mimeType: mimeType } },
+          { text: "Extract any UP Police related news from this newspaper image. Return JSON with: title (Hindi), content (Hindi detailed), sentiment (Positive/Negative/Neutral), sentimentReason (Hindi), summary (Hindi 2-3 lines), tags (array of Hindi tags), impactLevel (High/Medium/Low), recommendedAction (Hindi)." }
+        ]
+      }],
+      generationConfig: { responseMimeType: "application/json" }
+    };
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Gemini API error");
+    }
+    const data = await res.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  };
+
+  // Handle Image Upload for Scanner
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (!geminiApiKey) {
+      setScannerError("कृपया पहले Settings (नीचे बाएं) में जाकर अपनी Gemini API Key सेट करें।");
+      return;
+    }
+
+    setIsScanning(true);
+    setScannerError("");
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      try {
+        const base64String = (reader.result as string).split(',')[1];
+        const sysPrompt = "You are an expert UP Police Media Cell AI. You must read the provided newspaper clipping and extract police-related news accurately.";
+        const resultText = await callGeminiVisionDirect(sysPrompt, base64String, file.type);
+        const analysisData = JSON.parse(resultText);
+
+        const newNewsItem = {
+          id: `up-news-${Date.now()}`,
+          title: analysisData.title || "अज्ञात शीर्षक",
+          content: analysisData.content || "विवरण उपलब्ध नहीं",
+          source: "न्यूज़पेपर स्कैनर (AI Extract)",
+          date: new Date().toISOString().split('T')[0],
+          sentiment: analysisData.sentiment || "Neutral",
+          sentimentReason: analysisData.sentimentReason || "",
+          summary: analysisData.summary || "",
+          tags: analysisData.tags || [],
+          impactLevel: analysisData.impactLevel || "Low",
+          recommendedAction: analysisData.recommendedAction || ""
+        };
+
+        setNewsList(prev => [newNewsItem, ...prev]);
+        setSelectedNewsId(newNewsItem.id);
+        
+        if (newNewsItem.sentiment === "Negative") {
+          setAlerts(prev => [{
+            id: `alert-${Date.now()}`,
+            type: newNewsItem.impactLevel === "High" ? "Critical" : "Warning",
+            headline: `स्कैन की गई नकारात्मक खबर: ${newNewsItem.title.substring(0, 45)}...`,
+            timestamp: new Date().toISOString(),
+            channel: "Print Media",
+            handled: false
+          }, ...prev]);
+        }
+        
+        setIsScanning(false);
+        setActiveTab("feed"); // switch back to feed to show the result
+        window.alert("✅ अखबार से खबर सफलतापूर्वक एक्सट्रैक्ट करके मीडिया फीड में जोड़ दी गई है!");
+
+      } catch (err: any) {
+        setIsScanning(false);
+        console.error("Scanner Error:", err);
+        setScannerError(err.message || "इमेज पढ़ने में समस्या हुई। कृपया स्पष्ट तस्वीर अपलोड करें।");
+      }
+    };
+    reader.onerror = () => {
+      setIsScanning(false);
+      setScannerError("फाइल पढ़ने में त्रुटि।");
+    };
+    reader.readAsDataURL(file);
+  };
   // Fallback analyze function (works without API key)
   const fallbackAnalyze = (title: string, contentText: string) => {
     const text = (title + " " + contentText).toLowerCase();
@@ -456,6 +555,19 @@ export default function App() {
           >
             <BookOpen className="w-4 h-4 shrink-0" />
             <span>विभागीय नियम व IT नीतियाँ</span>
+          </button>
+
+          <button
+            id="tab-scanner-btn"
+            onClick={() => setActiveTab("scanner")}
+            className={`w-full px-5 py-3.5 flex items-center gap-3 transition-colors ${
+              activeTab === "scanner"
+                ? "bg-emerald-600 border-l-4 border-emerald-400 text-white font-bold"
+                : "text-slate-300 hover:bg-slate-800 hover:text-white border-l-4 border-transparent"
+            }`}
+          >
+            <ScanLine className="w-4 h-4" />
+            <span className="text-xs uppercase tracking-wider">न्यूज़पेपर स्कैनर</span>
           </button>
           <button
             id="tab-aichat-btn"
