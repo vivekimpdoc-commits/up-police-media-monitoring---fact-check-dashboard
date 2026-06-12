@@ -26,7 +26,10 @@ import {
   Info,
   ChevronRight,
   Sparkles,
-  PhoneCall
+  PhoneCall,
+  MessageSquare,
+  Send,
+  Bot
 } from "lucide-react";
 import { NewsItem, MediaAlert } from "./types";
 import { initialNewsItems, initialMediaAlerts } from "./data";
@@ -43,7 +46,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialMediaAlerts;
   });
 
-  const [activeTab, setActiveTab] = useState<"feed" | "factcheck" | "analytics" | "policy">("feed");
+  const [activeTab, setActiveTab] = useState<"feed" | "factcheck" | "analytics" | "policy" | "aichat">("feed");
   
   // News filtering & sorting states
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,7 +56,7 @@ export default function App() {
   const [sortOrder, setSortOrder] = useState<"latest" | "oldest">("latest");
   
   // Selected news item for full panel view
-  const [selectedNewsId, setSelectedNewsId] = useState<string | null>(initialNewsItems[0].id);
+  const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
 
   // New Article Form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -87,6 +90,11 @@ export default function App() {
     cyberConfirm: false,
     dgpConfirm: false
   });
+
+  // AI Chatbot state
+  const [chatMessages, setChatMessages] = useState<{role: "user" | "assistant"; text: string; timestamp: string}[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
   // Persist state to localStorage
   useEffect(() => {
@@ -273,11 +281,39 @@ export default function App() {
 
   // Selected news helper
   const selectedNewsItem = useMemo(() => {
-    return newsList.find(n => n.id === selectedNewsId) || null;
+    return newsList.find(n => n.id === selectedNewsId) || newsList[0];
   }, [newsList, selectedNewsId]);
 
+
+  // AI Chatbot submit handler
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isChatLoading) return;
+    
+    const userMsg = { role: "user" as const, text: chatInput.trim(), timestamp: new Date().toLocaleTimeString('hi-IN') };
+    setChatMessages(prev => [...prev, userMsg]);
+    const currentInput = chatInput;
+    setChatInput("");
+    setIsChatLoading(true);
+    
+    try {
+      const history = chatMessages.map(m => ({ role: m.role === "user" ? "user" : "model", text: m.text }));
+      const response = await fetch("/api/ai-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: currentInput, history })
+      });
+      const data = await response.json();
+      setChatMessages(prev => [...prev, { role: "assistant", text: data.reply || "कोई उत्तर प्राप्त नहीं हुआ।", timestamp: new Date().toLocaleTimeString('hi-IN') }]);
+    } catch (err) {
+      setChatMessages(prev => [...prev, { role: "assistant", text: "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।", timestamp: new Date().toLocaleTimeString('hi-IN') }]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
   return (
-    <div id="up-police-dashboard-container" className="flex flex-col lg:flex-row h-screen w-full bg-[#f8fafc] text-[#1e293b] font-sans overflow-hidden">
+    <div id="up-police-dashboard-container" className="flex flex-col lg:flex-row h-screen w-full bg-slate-100 text-slate-800 font-sans overflow-hidden">
       
       {/* Sidebar Navigation */}
       <aside className="w-full lg:w-72 bg-[#0f172a] text-white flex flex-col shrink-0 border-r border-slate-800 overflow-y-auto">
@@ -351,6 +387,18 @@ export default function App() {
             <BookOpen className="w-4 h-4 shrink-0" />
             <span>विभागीय नियम व IT नीतियाँ</span>
           </button>
+          <button
+            id="tab-aichat-btn"
+            onClick={() => setActiveTab("aichat")}
+            className={`w-full px-5 py-3 text-xs uppercase tracking-wider font-bold text-left transition-all flex items-center gap-3 cursor-pointer border-l-4 ${
+              activeTab === "aichat"
+                ? "bg-blue-600/15 border-blue-500 text-white"
+                : "text-slate-400 hover:text-white hover:bg-slate-800 border-transparent"
+            }`}
+          >
+            <Bot className="w-4 h-4 shrink-0" />
+            <span>एआई चैटबोट सहायक</span>
+          </button>
         </nav>
 
         {/* Sidebar Footer Indicator with Accuracy Meter */}
@@ -388,6 +436,7 @@ export default function App() {
               {activeTab === "factcheck" && "एआई संपुष्टि एवं फैक्ट-चेक केंद्र"}
               {activeTab === "analytics" && "सोशल सेंटीमेंट विश्लेषण विवरण"}
               {activeTab === "policy" && "विभागीय नियम व डिजिटल सोशल गाइडलाइन्स"}
+                {activeTab === "aichat" && "एआई चैटबोट — समाचार खोज सहायक (Powered by Google Gemini)"}
             </h2>
             <div className="hidden md:flex items-center bg-slate-100 rounded px-2.5 py-1 text-[10px] font-mono text-slate-600 border border-slate-200">
               DATE: 20-OCT-2023 - 26-OCT-2023 <span className="ml-1 text-blue-600">▼</span>
@@ -492,10 +541,10 @@ export default function App() {
 
         {/* TAB CONTENT: 1. MEDIA MONITORING FEED */}
         {activeTab === "feed" && (
-          <div id="monitoring-feed-view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div id="monitoring-feed-view" className="grid grid-cols-1 lg:grid-cols-12 items-stretch flex-1 min-h-0 overflow-hidden relative">
             
             {/* LEFT FILTER & FEED COLUMN */}
-            <div className="lg:col-span-5 flex flex-col gap-4">
+            <div className="lg:col-span-12 flex flex-col gap-4 h-full">
               
               {/* Searching, Filtration and Sorting controls */}
               <div className="p-4 bg-white border border-slate-200 rounded shadow-sm">
@@ -680,7 +729,7 @@ export default function App() {
               )}
 
               {/* RENDER CHRONOLOGICAL LIST OF SCANNED NEWS */}
-              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1 scrollbar-thin">
+              <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-2 pb-4 scrollbar-thin">
                 {filteredAndSortedNews.length === 0 ? (
                   <div className="p-8 bg-white border border-slate-200 rounded text-center text-slate-400 text-xs space-y-2 shadow-sm">
                     <AlertTriangle className="w-8 h-8 mx-auto text-slate-350" />
@@ -758,11 +807,15 @@ export default function App() {
             </div>
 
             {/* RIGHT SIDEBAR: CURRENT EXPANDED NEWS DETAILED ANALYSIS */}
-            <div className="lg:col-span-7">
+            <div className={`fixed inset-y-0 right-0 w-full md:w-[600px] lg:w-[700px] bg-white shadow-2xl border-l border-slate-300 z-[100] transform transition-transform duration-300 flex flex-col ${selectedNewsId ? "translate-x-0" : "translate-x-full"}`}>
               {selectedNewsItem ? (
-                <article id="news-analysis-panel" className="bg-white border border-slate-200 rounded shadow-sm overflow-hidden text-slate-800">
+    <>
+    <button onClick={() => setSelectedNewsId(null)} className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-rose-100 hover:text-rose-600 rounded-full text-slate-500 transition z-50 cursor-pointer shadow-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+                <article id="news-analysis-panel" className="bg-white border-0 shadow-none overflow-y-auto flex-1 h-full text-slate-800 relative">
                   {/* Panel Header */}
-                  <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                  <div className="p-5 pr-16 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                     <span className="text-[10px] text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-wider">
                       <Clock className="w-3.5 h-3.5 text-blue-600" />
                       <span>पैनल आईडी: {selectedNewsItem.id}</span>
@@ -872,14 +925,7 @@ export default function App() {
 
                     </div>
                   </div>
-                </article>
-              ) : (
-                <div className="p-12 bg-white border border-slate-200 rounded shadow-sm text-center text-slate-400 space-y-3">
-                  <Info className="w-10 h-10 mx-auto text-slate-350" />
-                  <p className="text-sm font-bold text-slate-700">कोई समाचार चयनित नहीं है</p>
-                  <p className="text-xs">विवरण और एआई विश्लेषण देखने के लिए बाईं फ़ीड से किसी भी समाचार पैच का चयन करें।</p>
-                </div>
-              )}
+                </article></>) : null}
             </div>
 
           </div>
@@ -993,9 +1039,18 @@ export default function App() {
                       </h3>
                     </div>
                     
-                    <div className="text-right">
-                      <span className="text-[9px] font-bold block opacity-80 uppercase tracking-wider">विश्वास स्कोर (AI Confidence)</span>
-                      <span className="text-2xl font-black">{currentFactCheck.confidence}%</span>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="text-[9px] font-bold block opacity-80 uppercase tracking-wider">विश्वास स्कोर (AI Confidence)</span>
+                        <span className="text-2xl font-black">{currentFactCheck.confidence}%</span>
+                      </div>
+                      <button
+                        onClick={() => { setCurrentFactCheck(null); setFactClaim(""); }}
+                        title="रिपोर्ट बंद करें (Exit)"
+                        className="p-1.5 bg-white/40 hover:bg-rose-500 hover:text-white rounded-full text-slate-800 transition cursor-pointer shadow-sm"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                      </button>
                     </div>
                   </div>
 
@@ -1128,6 +1183,24 @@ export default function App() {
                           {Object.values(checkedProtocols).filter(Boolean).length} / 4 प्रणालियाँ पूर्ण
                         </span>
                       </div>
+
+                      {/* COMPLETION BANNER — appears when all 4 protocols are done */}
+                      {Object.values(checkedProtocols).filter(Boolean).length === 4 && (
+                        <div className="mt-2 p-3 bg-emerald-50 border-2 border-emerald-400 rounded-lg shadow-sm flex items-center gap-3">
+                          <div className="shrink-0 w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center shadow-md">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                          </div>
+                          <div className="flex-1">
+                            <span className="text-emerald-800 font-black text-xs block">\u2705 सभी कार्रवाई पूर्ण — सत्यापन सम्पन्न (Verification Complete)</span>
+                            <span className="text-emerald-600 text-[10px] font-medium">
+                              सभी 4 प्रशासनिक प्रोटोकॉल सफलतापूर्वक सत्यापित किए गए हैं। समय: {new Date().toLocaleTimeString('hi-IN')}
+                            </span>
+                          </div>
+                          <span className="shrink-0 px-2.5 py-1 bg-emerald-500 text-white text-[10px] font-black rounded uppercase tracking-wider shadow-sm">
+                            Done ✓
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1414,6 +1487,112 @@ export default function App() {
       </div>
 
       {/* Footer copyright */}
+
+        {/* TAB CONTENT: 5. AI CHATBOT */}
+        {activeTab === "aichat" && (
+          <div id="aichat-view" className="flex flex-col h-[calc(100vh-220px)] bg-white border border-slate-200 rounded shadow-sm overflow-hidden">
+            
+            {/* Chat Header */}
+            <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center gap-3 shrink-0">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <Bot className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-sm tracking-tight">UP Police AI सहायक</h3>
+                <span className="text-[10px] text-blue-200 font-medium">Powered by Google Gemini — समाचार खोज, विश्लेषण एवं सहायता</span>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                <span className="text-[10px] font-bold text-emerald-300 uppercase">Online</span>
+              </div>
+            </div>
+
+            {/* Chat Messages Area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50" id="chat-messages-container" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>
+              {chatMessages.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-12">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Bot className="w-8 h-8 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-700">नमस्कार! मैं UP Police AI सहायक हूँ</h4>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md">मुझसे यूपी पुलिस से जुड़ी खबरों, मीडिया मॉनिटरिंग, कानून-व्यवस्था, या किसी भी विषय पर प्रश्न पूछें।</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4 max-w-lg">
+                    <button onClick={() => setChatInput("यूपी पुलिस की हाल की उपलब्धियाँ बताइए")} className="p-2.5 bg-white border border-slate-200 rounded-lg text-left text-xs text-slate-600 hover:bg-blue-50 hover:border-blue-300 transition cursor-pointer shadow-xs">
+                      <span className="text-blue-600 font-bold block text-[10px] mb-0.5">💬 सुझाव</span>
+                      यूपी पुलिस की हाल की उपलब्धियाँ बताइए
+                    </button>
+                    <button onClick={() => setChatInput("सोशल मीडिया पर फेक न्यूज़ कैसे पहचानें?")} className="p-2.5 bg-white border border-slate-200 rounded-lg text-left text-xs text-slate-600 hover:bg-blue-50 hover:border-blue-300 transition cursor-pointer shadow-xs">
+                      <span className="text-blue-600 font-bold block text-[10px] mb-0.5">💬 सुझाव</span>
+                      सोशल मीडिया पर फेक न्यूज़ कैसे पहचानें?
+                    </button>
+                    <button onClick={() => setChatInput("साइबर क्राइम के लिए कौन सी IPC धाराएं लागू होती हैं?")} className="p-2.5 bg-white border border-slate-200 rounded-lg text-left text-xs text-slate-600 hover:bg-blue-50 hover:border-blue-300 transition cursor-pointer shadow-xs">
+                      <span className="text-blue-600 font-bold block text-[10px] mb-0.5">💬 सुझाव</span>
+                      साइबर क्राइम के लिए कौन सी IPC धाराएं लागू होती हैं?
+                    </button>
+                    <button onClick={() => setChatInput("मीडिया मॉनिटरिंग में AI का क्या रोल है?")} className="p-2.5 bg-white border border-slate-200 rounded-lg text-left text-xs text-slate-600 hover:bg-blue-50 hover:border-blue-300 transition cursor-pointer shadow-xs">
+                      <span className="text-blue-600 font-bold block text-[10px] mb-0.5">💬 सुझाव</span>
+                      मीडिया मॉनिटरिंग में AI का क्या रोल है?
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {chatMessages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-sm ${
+                    msg.role === "user"
+                      ? "bg-blue-600 text-white rounded-br-sm"
+                      : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm"
+                  }`}>
+                    {msg.role === "assistant" && (
+                      <div className="flex items-center gap-1.5 mb-1.5 text-[9px] text-blue-600 font-bold uppercase">
+                        <Bot className="w-3 h-3" />
+                        <span>AI सहायक</span>
+                      </div>
+                    )}
+                    <div className="whitespace-pre-wrap">{msg.text}</div>
+                    <div className={`text-[9px] mt-1 ${msg.role === "user" ? "text-blue-200" : "text-slate-400"} text-right`}>
+                      {msg.timestamp}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {isChatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                      <span className="font-medium">AI सोच रहा है...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Chat Input Area */}
+            <form onSubmit={handleChatSubmit} className="p-3 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="यहाँ अपना प्रश्न टाइप करें... (जैसे: यूपी पुलिस की ताज़ा खबर बताओ)"
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-full px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white"
+                disabled={isChatLoading}
+              />
+              <button
+                type="submit"
+                disabled={isChatLoading || !chatInput.trim()}
+                className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-full transition cursor-pointer shadow-sm"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
+        )}
+
       <footer id="app-footer" className="bg-white border-t border-slate-200 py-4 text-xs text-slate-400 text-center uppercase tracking-wider shrink-0">
         <div className="max-w-7xl mx-auto px-4 space-y-1">
           <p className="font-bold text-slate-600">

@@ -288,6 +288,73 @@ Keep the analysis authoritative, unbiased, and extremely structured.`;
   }
 });
 
+
+// AI Chatbot endpoint for news-related queries
+app.post("/api/ai-chat", async (req, res) => {
+  const { message, history } = req.body;
+  if (!message) {
+    res.status(400).json({ error: "Message is required" });
+    return;
+  }
+
+  try {
+    const ai = getGeminiClient();
+
+    const systemPrompt = `You are "UP Police AI सहायक" (UP Police AI Assistant), an intelligent chatbot built into the UP Police Media Monitoring & Fact-Check Dashboard.
+
+Your role:
+- Answer questions about UP Police news, media monitoring, law & order, and public relations.
+- Help officers search for information about recent news events, viral claims, and social media trends related to UP Police.
+- Provide analysis, summaries, and context about policing topics in Uttar Pradesh.
+- Always respond in Hindi (Devanagari script) unless the user writes in English.
+- Be professional, respectful, and authoritative in your tone.
+- If asked about something outside your domain (UP Police / law enforcement / media monitoring), politely redirect.
+- Keep responses concise but informative (3-5 sentences for simple queries, more for complex ones).
+- Use bullet points and structured formatting when listing information.
+
+You have access to general knowledge about:
+- UP Police organizational structure, districts, and hierarchy
+- Common media monitoring practices and social media policies
+- Indian Penal Code (IPC/BNS) sections relevant to cyber crimes and misinformation
+- General law enforcement best practices`;
+
+    // Build conversation history for context
+    const contents = [];
+    if (history && Array.isArray(history)) {
+      for (const msg of history.slice(-10)) { // Last 10 messages for context
+        contents.push({
+          role: msg.role === "user" ? "user" : "model",
+          parts: [{ text: msg.text }]
+        });
+      }
+    }
+    contents.push({
+      role: "user",
+      parts: [{ text: message }]
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: contents,
+      config: {
+        systemInstruction: systemPrompt,
+      }
+    });
+
+    const resultText = response?.text;
+    if (!resultText) {
+      throw new Error("Empty response from AI model.");
+    }
+
+    res.json({ reply: resultText });
+  } catch (error: any) {
+    console.warn("AI Chat error:", error.message || error);
+    res.json({ 
+      reply: "क्षमा करें, इस समय एआई सेवा उपलब्ध नहीं है। कृपया सुनिश्चित करें कि GEMINI_API_KEY सेट है और बाद में पुनः प्रयास करें।\n\nत्रुटि: " + (error.message || "Unknown error")
+    });
+  }
+});
+
 // Configure Vite middleware or Static files serving
 async function setupServer() {
   if (process.env.NODE_ENV !== "production") {
