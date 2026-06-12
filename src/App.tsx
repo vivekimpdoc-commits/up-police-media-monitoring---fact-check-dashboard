@@ -115,7 +115,8 @@ export default function App() {
   // Direct Gemini API call helper (works without backend)
   const callGeminiDirect = async (systemPrompt: string, userPrompt: string, jsonMode = false): Promise<string> => {
     if (!geminiApiKey) throw new Error("NO_KEY");
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+    const cleanKey = geminiApiKey.trim();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${cleanKey}`;
     const body: any = {
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: "user", parts: [{ text: userPrompt }] }]
@@ -140,7 +141,8 @@ export default function App() {
   // Direct Gemini Vision API call (for Newspaper Scanner)
   const callGeminiVisionDirect = async (systemPrompt: string, base64Image: string, mimeType: string): Promise<string> => {
     if (!geminiApiKey) throw new Error("NO_KEY");
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+    const cleanKey = geminiApiKey.trim();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${cleanKey}`;
     const body = {
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents: [{
