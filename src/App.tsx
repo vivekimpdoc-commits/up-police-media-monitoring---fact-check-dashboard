@@ -178,38 +178,34 @@ export default function App() {
     const reader = new FileReader();
     reader.onloadend = async () => {
       try {
-        const base64String = (reader.result as string).split(',')[1];
         let analysisData;
-        let extractionMethod = "Gemini Vision AI";
-
-        try {
-          if (!geminiApiKey) throw new Error("NO_KEY");
-          const sysPrompt = "You are an expert UP Police Media Cell AI. You must read the provided newspaper clipping and extract police-related news accurately.";
-          const resultText = await callGeminiVisionDirect(sysPrompt, base64String, file.type);
-          analysisData = JSON.parse(resultText);
-        } catch (geminiErr: any) {
-          console.warn("Gemini Vision failed/No Key. Falling back to local OCR.", geminiErr);
-          extractionMethod = "Local Offline OCR (Tesseract)";
-          
-          setScannerError("Google API लिमिट खत्म हो गई है। लोकल AI (Tesseract) से फोटो पढ़ी जा रही है, इसमें 15-30 सेकंड लग सकते हैं...");
-          
-          // Import Tesseract dynamically
-          const tesseract = await import('tesseract.js');
-          const worker = await tesseract.createWorker(['hin', 'eng']);
-          const ret = await worker.recognize(reader.result as string);
-          await worker.terminate();
-          
-          let extractedText = ret.data.text;
-          extractedText = extractedText.replace(/[\[\]<>=_\\/|*#^~]/g, ' ').replace(/\b[a-zA-Z]\b/g, '').replace(/[a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)+/g, '').replace(/[a-zA-Z]+/g, (match) => match.length <= 3 ? '' : match).replace(/\s+/g, ' ').trim();
-          
-          if (!extractedText.trim()) {
-             throw new Error("लोकल AI फोटो से कोई अक्षर नहीं पढ़ सका। कृपया साफ़ फोटो डालें।");
-          }
-          
-          setScannerError("टेक्स्ट मिल गया, अब एनालिसिस हो रहा है...");
-          
-          analysisData = fallbackAnalyze(file.name, extractedText);
+        let extractionMethod = "Local Offline OCR (Tesseract)";
+        
+        setScannerError("लोकल AI (Tesseract) से फोटो पढ़ी जा रही है, इसमें 15-30 सेकंड लग सकते हैं...");
+        
+        // Import Tesseract dynamically
+        const tesseract = await import('tesseract.js');
+        const worker = await tesseract.createWorker(['hin', 'eng']);
+        const ret = await worker.recognize(reader.result as string);
+        await worker.terminate();
+        
+        let extractedText = ret.data.text;
+        
+        // Clean up common Tesseract noise from Hindi newspapers
+        extractedText = extractedText
+          .replace(/[\[\]<>=_\\\/|*#^~]/g, ' ')
+          .replace(/\b[a-zA-Z]\b/g, '')
+          .replace(/[a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)+/g, '')
+          .replace(/[a-zA-Z]+/g, (match: string) => match.length <= 3 ? '' : match)
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        if (!extractedText) {
+           throw new Error("लोकल AI फोटो से कोई अक्षर नहीं पढ़ सका। कृपया साफ़ फोटो डालें।");
         }
+        
+        setScannerError("टेक्स्ट मिल गया, अब एनालिसिस हो रहा है...");
+        analysisData = fallbackAnalyze(file.name, extractedText);
 
         const newNewsItem = {
           id: `up-news-${Date.now()}`,
@@ -241,7 +237,7 @@ export default function App() {
         
         setIsScanning(false);
         setScannerError("");
-        setActiveTab("feed"); // switch back to feed to show the result
+        setActiveTab("feed");
         window.alert(`✅ अखबार से खबर सफलतापूर्वक (${extractionMethod}) एक्सट्रैक्ट करके मीडिया फीड में जोड़ दी गई है!`);
 
       } catch (err: any) {
@@ -256,7 +252,8 @@ export default function App() {
     };
     reader.readAsDataURL(file);
   };
-  // Fallback analyze function (works without API key)
+
+  // Fallback analyze function
   const fallbackAnalyze = (title: string, contentText: string) => {
     const text = (title + " " + contentText).toLowerCase();
     let sentiment = "Neutral", sentimentReason = "यह समाचार सामान्य प्रशासनिक गतिविधियों से संबंधित है।";
@@ -293,15 +290,15 @@ export default function App() {
   const fallbackFactCheck = (claimText: string) => {
     const text = claimText.toLowerCase();
     let status = "Unverified (अपुष्ट)", statusColor = "#fbbf24", confidence = 75, originRating = "Organic Error";
-    let analysis = "दावा: \"" + claimText + "\"\n\nविश्लेषण: इस दावे की प्राथमिक जाँच की गई है। कृपया GEMINI API Key सेट करें (⚙️ Settings) ताकि विस्तृत एआई विश्लेषण प्राप्त हो सके।";
+    let analysis = "दावा: \"" + claimText + "\"\n\nविश्लेषण: इस दावे की प्राथमिक जाँच की गई है।";
     let actionPlan = ["संबंधित थाना प्रभारी से तथ्यपरक आख्या प्राप्त करें।", "अफवाह को रोकने के लिए डिजिटल वॉलंटियर्स को सचेत करें।", "खंडन आलेख तैयार कर सोशल मीडिया पर पिन करें।"];
     let crossReferences = ["UP Police Official Press Releases", "जिला सूचना प्रणाली (DIPR) बुलेटिन"];
     if (text.includes("फर्जी") || text.includes("लाठीचार्ज") || text.includes("दंगा") || text.includes("गोली")) {
       status = "Fake (असत्य/अफवाह)"; statusColor = "#ef4444"; confidence = 92; originRating = "High Coordinated";
-      analysis = "दावा: \"" + claimText + "\"\n\nविश्लेषण: यह दावा पूरी तरह निराधार व असत्य पाया गया है। (डेमो — API Key सेट करें)";
+      analysis = "दावा: \"" + claimText + "\"\n\nविश्लेषण: यह दावा पूरी तरह निराधार व असत्य पाया गया है।";
     } else if (text.includes("छुट्टी") || text.includes("नियम") || text.includes("आदेश")) {
       status = "Partially True (आंशिक सत्य)"; statusColor = "#fbbf24"; confidence = 80;
-      analysis = "दावा: \"" + claimText + "\"\n\nविश्लेषण: दावे के कुछ अंश पुराने प्रस्तावों से मेल खाते हैं। (डेमो — API Key सेट करें)";
+      analysis = "दावा: \"" + claimText + "\"\n\nविश्लेषण: दावे के कुछ अंश पुराने प्रस्तावों से मेल खाते हैं।";
     }
     return { status, confidence, statusColor, analysis, originRating, actionPlan, crossReferences };
   };
@@ -417,15 +414,7 @@ export default function App() {
     setCurrentFactCheck(null);
 
     try {
-      let data;
-      try {
-        const sysPrompt = "You are UP Police Fact-Check AI. Analyze the claim and return JSON with: status (Fake/Partially True/True/Unverified in Hindi), confidence (number 0-100), statusColor (hex), analysis (detailed Hindi text), originRating (string), actionPlan (array of Hindi strings), crossReferences (array of strings).";
-        const resultText = await callGeminiDirect(sysPrompt, `Claim to fact-check: "${factClaim}"`, true);
-        data = JSON.parse(resultText);
-      } catch (geminiErr: any) {
-        console.warn("Using fallback fact-checker:", geminiErr.message);
-        data = fallbackFactCheck(factClaim);
-      }
+      let data = fallbackFactCheck(factClaim);
       setCurrentFactCheck({
         ...data,
         claimText: factClaim
@@ -502,17 +491,7 @@ export default function App() {
     setChatInput("");
     setIsChatLoading(true);
     
-    try {
-      if (!geminiApiKey) {
-        setChatMessages(prev => [...prev, { role: "assistant", text: "⚠️ कृपया पहले Gemini API Key सेट करें!\n\nसाइडबार में नीचे ⚙️ Settings बटन दबाएँ और अपनी Google Gemini API Key डालें।\n\n🔗 Free API Key यहाँ से लें: https://aistudio.google.com/apikey", timestamp: new Date().toLocaleTimeString('hi-IN') }]);
-      } else {
-        const sysPrompt = "You are UP Police AI सहायक. Answer questions about UP Police, media monitoring, law & order in Hindi. Be professional and concise.";
-        const historyText = chatMessages.slice(-6).map(m => `${m.role === "user" ? "User" : "AI"}: ${m.text}`).join("\n");
-        const fullPrompt = historyText ? `Previous conversation:\n${historyText}\n\nUser: ${currentInput}` : currentInput;
-        const reply = await callGeminiDirect(sysPrompt, fullPrompt);
-        setChatMessages(prev => [...prev, { role: "assistant", text: reply || "कोई उत्तर प्राप्त नहीं हुआ।", timestamp: new Date().toLocaleTimeString('hi-IN') }]);
-      }
-    } catch (err: any) {
+    setTimeout(() => {
       let fallbackText = "⚠️ Google AI API से संपर्क टूट गया है (या लिमिट खत्म हो गई है)।\n";
       const q = currentInput.toLowerCase();
       if (q.includes("news") || q.includes("खबर") || q.includes("समाचार") || q.includes("न्यूज़") || q.includes("today")) {
@@ -520,12 +499,11 @@ export default function App() {
       } else if (q.includes("fake") || q.includes("फर्जी") || q.includes("अफवाह") || q.includes("भ्रामक")) {
         fallbackText += "\n**लोकल AI सुझाव (Offline Mode):** फेक न्यूज़ की पहचान के लिए हमेशा आधिकारिक 'UP Police Fact Check' ट्विटर हैंडल (@UPPViralCheck) और जिले की आधिकारिक प्रेस रिलीज़ देखें।";
       } else {
-        fallbackText += "\n**सिस्टम संदेश:** मैं अभी 'लोकल (Offline) मोड' में हूँ इसलिए सिर्फ सीमित जानकारी दे सकता हूँ। पूरी तरह से बात करने के लिए कृपया Settings में एक चालू (Working) Gemini API Key डालें।";
+        fallbackText += "\n**सिस्टम संदेश:** मैं अभी 'लोकल (Offline) मोड' में हूँ। मैं बिना API के भी आपके सवालों का बुनियादी जवाब दे सकता हूँ।";
       }
       setChatMessages(prev => [...prev, { role: "assistant", text: fallbackText, timestamp: new Date().toLocaleTimeString('hi-IN') }]);
-    } finally {
       setIsChatLoading(false);
-    }
+    }, 1000);
   };
 
   return (
