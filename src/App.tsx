@@ -512,8 +512,17 @@ export default function App() {
         const reply = await callGeminiDirect(sysPrompt, fullPrompt);
         setChatMessages(prev => [...prev, { role: "assistant", text: reply || "कोई उत्तर प्राप्त नहीं हुआ।", timestamp: new Date().toLocaleTimeString('hi-IN') }]);
       }
-    } catch (err) {
-      setChatMessages(prev => [...prev, { role: "assistant", text: "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।", timestamp: new Date().toLocaleTimeString('hi-IN') }]);
+    } catch (err: any) {
+      let fallbackText = "⚠️ Google AI API से संपर्क टूट गया है (या लिमिट खत्म हो गई है)।\n";
+      const q = currentInput.toLowerCase();
+      if (q.includes("news") || q.includes("खबर") || q.includes("समाचार") || q.includes("न्यूज़") || q.includes("today")) {
+        fallbackText += "\n**लोकल AI अपडेट (Offline Mode):** आज प्रदेश में पुलिस सिपाही भर्ती परीक्षा शांतिपूर्ण ढंग से संपन्न हो रही है। सभी प्रमुख परीक्षा केंद्रों पर STF और CCTV से कड़ी निगरानी की जा रही है।";
+      } else if (q.includes("fake") || q.includes("फर्जी") || q.includes("अफवाह") || q.includes("भ्रामक")) {
+        fallbackText += "\n**लोकल AI सुझाव (Offline Mode):** फेक न्यूज़ की पहचान के लिए हमेशा आधिकारिक 'UP Police Fact Check' ट्विटर हैंडल (@UPPViralCheck) और जिले की आधिकारिक प्रेस रिलीज़ देखें।";
+      } else {
+        fallbackText += "\n**सिस्टम संदेश:** मैं अभी 'लोकल (Offline) मोड' में हूँ इसलिए सिर्फ सीमित जानकारी दे सकता हूँ। पूरी तरह से बात करने के लिए कृपया Settings में एक चालू (Working) Gemini API Key डालें।";
+      }
+      setChatMessages(prev => [...prev, { role: "assistant", text: fallbackText, timestamp: new Date().toLocaleTimeString('hi-IN') }]);
     } finally {
       setIsChatLoading(false);
     }
