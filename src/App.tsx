@@ -199,7 +199,8 @@ export default function App() {
           const ret = await worker.recognize(reader.result as string);
           await worker.terminate();
           
-          const extractedText = ret.data.text;
+          let extractedText = ret.data.text;
+          extractedText = extractedText.replace(/[\[\]<>=_\\/|*#^~]/g, ' ').replace(/\b[a-zA-Z]\b/g, '').replace(/[a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)+/g, '').replace(/[a-zA-Z]+/g, (match) => match.length <= 3 ? '' : match).replace(/\s+/g, ' ').trim();
           
           if (!extractedText.trim()) {
              throw new Error("लोकल AI फोटो से कोई अक्षर नहीं पढ़ सका। कृपया साफ़ फोटो डालें।");
