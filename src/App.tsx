@@ -269,10 +269,23 @@ export default function App() {
     } else if (text.includes("रिश्वत") || text.includes("भ्रष्टाचार") || text.includes("लापरवाही") || text.includes("आरोप") || text.includes("मारपीट") || text.includes("शिकायत")) {
       sentiment = "Negative"; tags = ["रिश्वतखोरी", "लापरवाही", "विभागीय जांच"]; impactLevel = "High";
       sentimentReason = "इस लेख में पुलिस कर्मियों के विरुद्ध कदाचार का आरोप है।";
-      summary = "संवेदनात्मक घटना जिसमें पुलिस कर्मियों के विरुद्ध आरोप है।";
       recommendedAction = "उच्चाधिकारियों द्वारा तुरंत जांच बैठाई जाए।";
     }
-    return { sentiment, sentimentReason, summary, tags, impactLevel, recommendedAction };
+
+    const titleLines = contentText.split('\n').map(l => l.trim()).filter(l => l.length > 10);
+    const titleFromText = titleLines.length > 0 ? titleLines[0] : title;
+    const finalSummary = contentText.length > 150 ? contentText.substring(0, 150) + "..." : contentText;
+
+    return { 
+      title: titleFromText.substring(0, 100),
+      content: contentText,
+      sentiment, 
+      sentimentReason, 
+      summary: finalSummary, 
+      tags, 
+      impactLevel, 
+      recommendedAction 
+    };
   };
 
   // Fallback fact-check function
