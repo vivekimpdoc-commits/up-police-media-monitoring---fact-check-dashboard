@@ -1695,6 +1695,65 @@ export default function App() {
 
       {/* Footer copyright */}
 
+        {/* TAB CONTENT: SCANNER VIEW */}
+        {activeTab === "scanner" && (
+          <div id="scanner-view" className="flex flex-col h-full overflow-y-auto">
+            <div className="bg-gradient-to-r from-emerald-800 to-emerald-600 text-white p-6 shadow-md shrink-0">
+              <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+                <ScanLine className="w-6 h-6" />
+                AI न्यूज़पेपर स्कैनर
+              </h2>
+              <p className="text-emerald-100 text-xs mt-2 uppercase tracking-wide opacity-90">
+                Upload physical newspaper clippings for automatic data extraction
+              </p>
+            </div>
+
+            <div className="p-6 flex-grow flex items-center justify-center bg-white">
+              <div className="max-w-2xl w-full">
+                <div className="border-2 border-dashed border-emerald-300 bg-emerald-50 rounded-xl p-12 text-center transition-all hover:bg-emerald-100">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleImageUpload}
+                    className="hidden" 
+                    id="newspaper-upload"
+                  />
+                  <label 
+                    htmlFor="newspaper-upload" 
+                    className="cursor-pointer flex flex-col items-center justify-center"
+                  >
+                    <div className="w-20 h-20 bg-emerald-200 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                      <UploadCloud className="w-10 h-10 text-emerald-700" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-2">अखबार की फोटो अपलोड करें</h3>
+                    <p className="text-sm text-slate-500 mb-6 max-w-md">
+                      क्लिक करें और अपने कंप्यूटर/मोबाइल से न्यूज़पेपर की कटिंग (JPG/PNG) चुनें। AI अपने आप खबर पढ़कर फीड में जोड़ देगा।
+                    </p>
+                    <span className="px-6 py-2.5 bg-emerald-600 text-white text-sm font-bold uppercase rounded shadow-md hover:bg-emerald-700 transition-colors">
+                      Select Image
+                    </span>
+                  </label>
+                </div>
+
+                {isScanning && (
+                  <div className="mt-8 flex flex-col items-center justify-center p-6 bg-slate-50 rounded border border-slate-200">
+                    <ScanLine className="w-10 h-10 text-emerald-500 animate-pulse mb-3" />
+                    <h4 className="text-emerald-700 font-bold mb-1">AI अखबार स्कैन कर रहा है...</h4>
+                    <p className="text-xs text-slate-500">कृपया प्रतीक्षा करें, इसमें कुछ सेकंड लग सकते हैं</p>
+                  </div>
+                )}
+
+                {scannerError && (
+                  <div className="mt-6 p-4 bg-red-50 border-l-4 border-red-500 rounded text-red-700 text-sm font-medium">
+                    {scannerError}
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* TAB CONTENT: 5. AI CHATBOT */}
         {activeTab === "aichat" && (
           <div id="aichat-view" className="flex flex-col h-[calc(100vh-220px)] bg-white border border-slate-200 rounded shadow-sm overflow-hidden">
