@@ -37,6 +37,8 @@ import {
   Image as ImageIcon
 } from "lucide-react";
 import { NewsItem, MediaAlert } from "./types";
+import AnalyticsDashboard from './AnalyticsDashboard';
+import SocialMediaWatch from './SocialMediaWatch';
 import { initialNewsItems, initialMediaAlerts } from "./data";
 
 export default function App() {
@@ -51,7 +53,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialMediaAlerts;
   });
 
-  const [activeTab, setActiveTab] = useState<"feed" | "factcheck" | "analytics" | "policy" | "aichat" | "scanner">("feed");
+  const [activeTab, setActiveTab] = useState<"feed" | "factcheck" | "analytics" | "policy" | "aichat" | "scanner" | "social">("feed");
   const [isScanning, setIsScanning] = useState(false);
   const [scannerError, setScannerError] = useState("");
   
