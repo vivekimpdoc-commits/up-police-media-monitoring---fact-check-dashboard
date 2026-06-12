@@ -172,11 +172,6 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    if (!geminiApiKey) {
-      setScannerError("कृपया पहले Settings (नीचे बाएं) में जाकर अपनी Gemini API Key सेट करें।");
-      return;
-    }
-
     setIsScanning(true);
     setScannerError("");
 
@@ -184,15 +179,42 @@ export default function App() {
     reader.onloadend = async () => {
       try {
         const base64String = (reader.result as string).split(',')[1];
-        const sysPrompt = "You are an expert UP Police Media Cell AI. You must read the provided newspaper clipping and extract police-related news accurately.";
-        const resultText = await callGeminiVisionDirect(sysPrompt, base64String, file.type);
-        const analysisData = JSON.parse(resultText);
+        let analysisData;
+        let extractionMethod = "Gemini Vision AI";
+
+        try {
+          if (!geminiApiKey) throw new Error("NO_KEY");
+          const sysPrompt = "You are an expert UP Police Media Cell AI. You must read the provided newspaper clipping and extract police-related news accurately.";
+          const resultText = await callGeminiVisionDirect(sysPrompt, base64String, file.type);
+          analysisData = JSON.parse(resultText);
+        } catch (geminiErr: any) {
+          console.warn("Gemini Vision failed/No Key. Falling back to local OCR.", geminiErr);
+          extractionMethod = "Local Offline OCR (Tesseract)";
+          
+          setScannerError("Google API लिमिट खत्म हो गई है। लोकल AI (Tesseract) से फोटो पढ़ी जा रही है, इसमें 15-30 सेकंड लग सकते हैं...");
+          
+          // Import Tesseract dynamically
+          const tesseract = await import('tesseract.js');
+          const worker = await tesseract.createWorker(['hin', 'eng']);
+          const ret = await worker.recognize(reader.result as string);
+          await worker.terminate();
+          
+          const extractedText = ret.data.text;
+          
+          if (!extractedText.trim()) {
+             throw new Error("लोकल AI फोटो से कोई अक्षर नहीं पढ़ सका। कृपया साफ़ फोटो डालें।");
+          }
+          
+          setScannerError("टेक्स्ट मिल गया, अब एनालिसिस हो रहा है...");
+          
+          analysisData = fallbackAnalyze(file.name, extractedText);
+        }
 
         const newNewsItem = {
           id: `up-news-${Date.now()}`,
-          title: analysisData.title || "अज्ञात शीर्षक",
-          content: analysisData.content || "विवरण उपलब्ध नहीं",
-          source: "न्यूज़पेपर स्कैनर (AI Extract)",
+          title: analysisData.title || analysisData.summary?.split('\n')[0]?.substring(0, 50) || "अज्ञात शीर्षक",
+          content: analysisData.content || analysisData.summary || "विवरण उपलब्ध नहीं",
+          source: `न्यूज़पेपर स्कैनर (${extractionMethod})`,
           date: new Date().toISOString().split('T')[0],
           sentiment: analysisData.sentiment || "Neutral",
           sentimentReason: analysisData.sentimentReason || "",
@@ -217,8 +239,9 @@ export default function App() {
         }
         
         setIsScanning(false);
+        setScannerError("");
         setActiveTab("feed"); // switch back to feed to show the result
-        window.alert("✅ अखबार से खबर सफलतापूर्वक एक्सट्रैक्ट करके मीडिया फीड में जोड़ दी गई है!");
+        window.alert(`✅ अखबार से खबर सफलतापूर्वक (${extractionMethod}) एक्सट्रैक्ट करके मीडिया फीड में जोड़ दी गई है!`);
 
       } catch (err: any) {
         setIsScanning(false);
