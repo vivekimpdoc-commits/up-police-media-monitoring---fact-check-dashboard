@@ -259,13 +259,12 @@ export default function App() {
   const fallbackAnalyze = (title: string, contentText: string) => {
     const text = (title + " " + contentText).toLowerCase();
     let sentiment = "Neutral", sentimentReason = "यह समाचार सामान्य प्रशासनिक गतिविधियों से संबंधित है।";
-    let summary = "इस लेख में उत्तर प्रदेश पुलिस बल की दैनिक संक्रियाओं का विवरण प्रस्तुत किया गया है।";
     let tags = ["कानून-व्यवस्था", "विविध समाचार"], impactLevel = "Low";
     let recommendedAction = "स्थानीय मीडिया सेल इस समाचार की डिजिटल पहुंच की निगरानी करे।";
+    
     if (text.includes("बहादुरी") || text.includes("सहायता") || text.includes("बचाया") || text.includes("प्रशंसा") || text.includes("महिला") || text.includes("मदद")) {
       sentiment = "Positive"; tags = ["महिला सुरक्षा", "साहस प्रदर्शन", "जन-सेवा"]; impactLevel = "Medium";
       sentimentReason = "इस समाचार में पुलिस बल द्वारा सकारात्मक कार्य प्रदर्शित किया गया है।";
-      summary = "यूपी पुलिस टीम की त्वरित कार्रवाई और नागरिक-केंद्रित पहल के बारे में सकारात्मक लेख।";
       recommendedAction = "सोशल मीडिया सेल X (@UPPolice) के माध्यम से इस खबर को साझा करें।";
     } else if (text.includes("रिश्वत") || text.includes("भ्रष्टाचार") || text.includes("लापरवाही") || text.includes("आरोप") || text.includes("मारपीट") || text.includes("शिकायत")) {
       sentiment = "Negative"; tags = ["रिश्वतखोरी", "लापरवाही", "विभागीय जांच"]; impactLevel = "High";
