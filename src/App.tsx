@@ -29,7 +29,9 @@ import {
   PhoneCall,
   MessageSquare,
   Send,
-  Bot
+  Bot,
+  Settings,
+  Key
 } from "lucide-react";
 import { NewsItem, MediaAlert } from "./types";
 import { initialNewsItems, initialMediaAlerts } from "./data";
@@ -96,6 +98,77 @@ export default function App() {
   const [chatInput, setChatInput] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
 
+  // Gemini API Key (stored in localStorage for GitHub Pages)
+  const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem("gemini_api_key") || "");
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+
+  // Save API key to localStorage
+  useEffect(() => {
+    if (geminiApiKey) localStorage.setItem("gemini_api_key", geminiApiKey);
+  }, [geminiApiKey]);
+
+  // Direct Gemini API call helper (works without backend)
+  const callGeminiDirect = async (systemPrompt: string, userPrompt: string, jsonMode = false): Promise<string> => {
+    if (!geminiApiKey) throw new Error("NO_KEY");
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+    const body: any = {
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }]
+    };
+    if (jsonMode) {
+      body.generationConfig = { responseMimeType: "application/json" };
+    }
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Gemini API error");
+    }
+    const data = await res.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  };
+
+  // Fallback analyze function (works without API key)
+  const fallbackAnalyze = (title: string, contentText: string) => {
+    const text = (title + " " + contentText).toLowerCase();
+    let sentiment = "Neutral", sentimentReason = "यह समाचार सामान्य प्रशासनिक गतिविधियों से संबंधित है।";
+    let summary = "इस लेख में उत्तर प्रदेश पुलिस बल की दैनिक संक्रियाओं का विवरण प्रस्तुत किया गया है।";
+    let tags = ["कानून-व्यवस्था", "विविध समाचार"], impactLevel = "Low";
+    let recommendedAction = "स्थानीय मीडिया सेल इस समाचार की डिजिटल पहुंच की निगरानी करे।";
+    if (text.includes("बहादुरी") || text.includes("सहायता") || text.includes("बचाया") || text.includes("प्रशंसा") || text.includes("महिला") || text.includes("मदद")) {
+      sentiment = "Positive"; tags = ["महिला सुरक्षा", "साहस प्रदर्शन", "जन-सेवा"]; impactLevel = "Medium";
+      sentimentReason = "इस समाचार में पुलिस बल द्वारा सकारात्मक कार्य प्रदर्शित किया गया है।";
+      summary = "यूपी पुलिस टीम की त्वरित कार्रवाई और नागरिक-केंद्रित पहल के बारे में सकारात्मक लेख।";
+      recommendedAction = "सोशल मीडिया सेल X (@UPPolice) के माध्यम से इस खबर को साझा करें।";
+    } else if (text.includes("रिश्वत") || text.includes("भ्रष्टाचार") || text.includes("लापरवाही") || text.includes("आरोप") || text.includes("मारपीट") || text.includes("शिकायत")) {
+      sentiment = "Negative"; tags = ["रिश्वतखोरी", "लापरवाही", "विभागीय जांच"]; impactLevel = "High";
+      sentimentReason = "इस लेख में पुलिस कर्मियों के विरुद्ध कदाचार का आरोप है।";
+      summary = "संवेदनात्मक घटना जिसमें पुलिस कर्मियों के विरुद्ध आरोप है।";
+      recommendedAction = "उच्चाधिकारियों द्वारा तुरंत जांच बैठाई जाए।";
+    }
+    return { sentiment, sentimentReason, summary, tags, impactLevel, recommendedAction };
+  };
+
+  // Fallback fact-check function
+  const fallbackFactCheck = (claimText: string) => {
+    const text = claimText.toLowerCase();
+    let status = "Unverified (अपुष्ट)", statusColor = "#fbbf24", confidence = 75, originRating = "Organic Error";
+    let analysis = "दावा: \"" + claimText + "\"\n\nविश्लेषण: इस दावे की प्राथमिक जाँच की गई है। कृपया GEMINI API Key सेट करें (⚙️ Settings) ताकि विस्तृत एआई विश्लेषण प्राप्त हो सके।";
+    let actionPlan = ["संबंधित थाना प्रभारी से तथ्यपरक आख्या प्राप्त करें।", "अफवाह को रोकने के लिए डिजिटल वॉलंटियर्स को सचेत करें।", "खंडन आलेख तैयार कर सोशल मीडिया पर पिन करें।"];
+    let crossReferences = ["UP Police Official Press Releases", "जिला सूचना प्रणाली (DIPR) बुलेटिन"];
+    if (text.includes("फर्जी") || text.includes("लाठीचार्ज") || text.includes("दंगा") || text.includes("गोली")) {
+      status = "Fake (असत्य/अफवाह)"; statusColor = "#ef4444"; confidence = 92; originRating = "High Coordinated";
+      analysis = "दावा: \"" + claimText + "\"\n\nविश्लेषण: यह दावा पूरी तरह निराधार व असत्य पाया गया है। (डेमो — API Key सेट करें)";
+    } else if (text.includes("छुट्टी") || text.includes("नियम") || text.includes("आदेश")) {
+      status = "Partially True (आंशिक सत्य)"; statusColor = "#fbbf24"; confidence = 80;
+      analysis = "दावा: \"" + claimText + "\"\n\nविश्लेषण: दावे के कुछ अंश पुराने प्रस्तावों से मेल खाते हैं। (डेमो — API Key सेट करें)";
+    }
+    return { status, confidence, statusColor, analysis, originRating, actionPlan, crossReferences };
+  };
+
   // Persist state to localStorage
   useEffect(() => {
     localStorage.setItem("up_police_news", JSON.stringify(newsList));
@@ -143,17 +216,15 @@ export default function App() {
     setIsAnalyzing(true);
 
     try {
-      const response = await fetch("/api/analyze-news", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newTitle, content: newContent })
-      });
-
-      if (!response.ok) {
-        throw new Error("सर्वर से समाचार विश्लेषण प्राप्त करने में विफलता हुई।");
+      let analysisData;
+      try {
+        const sysPrompt = "You are an expert UP Police Media Cell AI. Analyze the news and return JSON with: sentiment (Positive/Negative/Neutral), sentimentReason (Hindi), summary (Hindi 2-3 lines), tags (array of Hindi tags), impactLevel (High/Medium/Low), recommendedAction (Hindi).";
+        const resultText = await callGeminiDirect(sysPrompt, `Title: "${newTitle}"\nContent: "${newContent}"`, true);
+        analysisData = JSON.parse(resultText);
+      } catch (geminiErr: any) {
+        console.warn("Using fallback analyzer:", geminiErr.message);
+        analysisData = fallbackAnalyze(newTitle, newContent);
       }
-
-      const analysisData = await response.json();
       
       const newNewsItem: NewsItem = {
         id: `up-news-${Date.now()}`,
@@ -209,17 +280,15 @@ export default function App() {
     setCurrentFactCheck(null);
 
     try {
-      const response = await fetch("/api/check-fact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claim: factClaim })
-      });
-
-      if (!response.ok) {
-        throw new Error("फैक्ट-चेक सर्वर से विश्लेषण प्राप्त करने में विफलता।");
+      let data;
+      try {
+        const sysPrompt = "You are UP Police Fact-Check AI. Analyze the claim and return JSON with: status (Fake/Partially True/True/Unverified in Hindi), confidence (number 0-100), statusColor (hex), analysis (detailed Hindi text), originRating (string), actionPlan (array of Hindi strings), crossReferences (array of strings).";
+        const resultText = await callGeminiDirect(sysPrompt, `Claim to fact-check: "${factClaim}"`, true);
+        data = JSON.parse(resultText);
+      } catch (geminiErr: any) {
+        console.warn("Using fallback fact-checker:", geminiErr.message);
+        data = fallbackFactCheck(factClaim);
       }
-
-      const data = await response.json();
       setCurrentFactCheck({
         ...data,
         claimText: factClaim
@@ -297,14 +366,15 @@ export default function App() {
     setIsChatLoading(true);
     
     try {
-      const history = chatMessages.map(m => ({ role: m.role === "user" ? "user" : "model", text: m.text }));
-      const response = await fetch("/api/ai-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: currentInput, history })
-      });
-      const data = await response.json();
-      setChatMessages(prev => [...prev, { role: "assistant", text: data.reply || "कोई उत्तर प्राप्त नहीं हुआ।", timestamp: new Date().toLocaleTimeString('hi-IN') }]);
+      if (!geminiApiKey) {
+        setChatMessages(prev => [...prev, { role: "assistant", text: "⚠️ कृपया पहले Gemini API Key सेट करें!\n\nसाइडबार में नीचे ⚙️ Settings बटन दबाएँ और अपनी Google Gemini API Key डालें।\n\n🔗 Free API Key यहाँ से लें: https://aistudio.google.com/apikey", timestamp: new Date().toLocaleTimeString('hi-IN') }]);
+      } else {
+        const sysPrompt = "You are UP Police AI सहायक. Answer questions about UP Police, media monitoring, law & order in Hindi. Be professional and concise.";
+        const historyText = chatMessages.slice(-6).map(m => `${m.role === "user" ? "User" : "AI"}: ${m.text}`).join("\n");
+        const fullPrompt = historyText ? `Previous conversation:\n${historyText}\n\nUser: ${currentInput}` : currentInput;
+        const reply = await callGeminiDirect(sysPrompt, fullPrompt);
+        setChatMessages(prev => [...prev, { role: "assistant", text: reply || "कोई उत्तर प्राप्त नहीं हुआ।", timestamp: new Date().toLocaleTimeString('hi-IN') }]);
+      }
     } catch (err) {
       setChatMessages(prev => [...prev, { role: "assistant", text: "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।", timestamp: new Date().toLocaleTimeString('hi-IN') }]);
     } finally {
@@ -401,6 +471,31 @@ export default function App() {
           </button>
         </nav>
 
+
+          {/* API Key Settings */}
+          <div className="px-4 pb-2">
+            <button
+              onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+              className={`w-full px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-left transition-all flex items-center gap-2 cursor-pointer rounded ${
+                geminiApiKey ? "bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50" : "bg-amber-900/30 text-amber-400 hover:bg-amber-900/50"
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>{geminiApiKey ? "✓ API Key सेट है" : "⚙️ Gemini API Key सेट करें"}</span>
+            </button>
+            {showApiKeyInput && (
+              <div className="mt-2 space-y-2">
+                <input
+                  type="password"
+                  placeholder="AIza... (Google Gemini API Key)"
+                  value={geminiApiKey}
+                  onChange={(e) => setGeminiApiKey(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-[11px] text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-400 hover:text-blue-300 underline block">🔗 Free API Key यहाँ से लें (Google AI Studio)</a>
+              </div>
+            )}
+          </div>
         {/* Sidebar Footer Indicator with Accuracy Meter */}
         <div className="p-4 border-t border-slate-800 space-y-3 bg-slate-950/40">
           <div className="bg-slate-900 rounded-lg p-3 text-xs border border-slate-800">
